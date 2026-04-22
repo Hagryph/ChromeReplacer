@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chrome Replacer</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 6h9M4 12h16M4 18h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M15 15l3 3 3-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1>Chrome Replacer</h1>
+      <span id="count-pill" class="pill pill-dim" aria-live="polite">0 rules</span>
+    </div>
+    <div class="brand-actions">
+      <button id="btn-import" class="btn btn-ghost" type="button" title="Import rules from JSON">Import</button>
+      <button id="btn-export" class="btn btn-ghost" type="button" title="Export rules as JSON">Export</button>
+      <button id="btn-add" class="btn btn-primary" type="button">
+        <span class="btn-glyph">+</span> Add rule
+      </button>
+    </div>
+  </header>
+
+  <div class="toolbar" id="toolbar">
+    <div class="toolbar-default" id="toolbar-default">
+      <div class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" class="search-icon">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
+          <path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <input id="search" type="search" placeholder="Search rules…" autocomplete="off" spellcheck="false" />
+        <kbd class="search-hint">/</kbd>
+      </div>
+      <div class="filters" role="tablist" aria-label="Filter rules">
+        <button class="seg-btn is-active" data-status="all" role="tab">All</button>
+        <button class="seg-btn" data-status="enabled" role="tab">Enabled</button>
+        <button class="seg-btn" data-status="disabled" role="tab">Disabled</button>
+        <span class="filter-sep" aria-hidden="true"></span>
+        <button id="filter-regex" class="pill-toggle" aria-pressed="false" title="Show only regex rules">
+          <span class="pill-glyph">.*</span> Regex
+        </button>
+      </div>
+    </div>
+
+    <div class="toolbar-bulk" id="toolbar-bulk" hidden>
+      <span class="bulk-count"><strong id="bulk-count-n">0</strong> selected</span>
+      <button id="bulk-clear" class="btn btn-ghost btn-sm" type="button">Clear</button>
+      <span class="bulk-sep"></span>
+      <button id="bulk-enable" class="btn btn-ghost btn-sm" type="button">Enable</button>
+      <button id="bulk-disable" class="btn btn-ghost btn-sm" type="button">Disable</button>
+      <button id="bulk-duplicate" class="btn btn-ghost btn-sm" type="button">Duplicate</button>
+      <span class="bulk-sep"></span>
+      <button id="bulk-delete" class="btn btn-danger btn-sm" type="button">Delete</button>
+    </div>
+  </div>
+
+  <main class="viewport" id="viewport" tabindex="0">
+    <div class="spacer" id="spacer"></div>
+    <div class="rows" id="rows"></div>
+
+    <div class="empty-state" id="empty-state" hidden>
+      <div class="empty-ring">
+        <svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.6" fill="none"/>
+          <path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h2 id="empty-title">No rules yet</h2>
+      <p id="empty-body">Click <strong>Add rule</strong> to create your first find-and-replace rule.</p>
+    </div>
+  </main>
+
+  <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
+
+  <dialog id="confirm-dialog" class="confirm">
+    <form method="dialog">
+      <h3 id="confirm-title">Delete rules?</h3>
+      <p id="confirm-body">This cannot be undone.</p>
+      <div class="confirm-actions">
+        <button value="cancel" class="btn btn-ghost" type="submit">Cancel</button>
+        <button value="ok" class="btn btn-danger" type="submit" id="confirm-ok">Delete</button>
+      </div>
+    </form>
+  </dialog>
+
+  <input id="import-file" type="file" accept="application/json,.json" hidden />
+
+  <template id="row-template">
+    <div class="row" role="listitem">
+      <label class="row-select">
+        <input type="checkbox" class="row-check" />
+        <span class="checkmark" aria-hidden="true"></span>
+      </label>
+
+      <label class="row-enable" title="Enable rule">
+        <input type="checkbox" class="row-enabled" />
+        <span class="switch" aria-hidden="true"></span>
+      </label>
+
+      <div class="row-fields">
+        <div class="field field-find">
+          <input type="text" class="inp inp-find" placeholder="Find (text or regex)…" spellcheck="false" autocomplete="off" />
+          <div class="field-toggles">
+            <button type="button" class="tgl tgl-regex" aria-pressed="false" title="Regex (.*)">.*</button>
+            <button type="button" class="tgl tgl-whole" aria-pressed="false" title="Match whole word">
+              <span class="tgl-whole-glyph">ab</span>
+            </button>
+          </div>
+        </div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="field field-replace">
+          <input type="text" class="inp inp-replace" placeholder="Replace with…" spellcheck="false" autocomplete="off" />
+        </div>
+      </div>
+
+      <button type="button" class="row-delete" title="Delete rule" aria-label="Delete rule">
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 7h14M10 7V5a1 1 0 011-1h2a1 1 0 011 1v2M7 7l1 12a2 2 0 002 2h4a2 2 0 002-2l1-12" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </template>
+
+  <script src="options.js"></script>
+</body>
+</html>
