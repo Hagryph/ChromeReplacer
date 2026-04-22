@@ -270,7 +270,44 @@ button { font-family: inherit; }
   background: var(--accent-dim);
 }
 .row.is-disabled .row-fields { opacity: 0.5; }
-.row.is-invalid .inp-find { border-left: 2px solid var(--danger); }
+.row.is-invalid .field-find { border-left: 2px solid var(--danger); }
+
+.row.is-map {
+  align-items: stretch;
+  padding: 10px;
+}
+.row.is-map .row-select, .row.is-map .row-enable, .row.is-map .row-delete { align-self: center; }
+.row.is-map .row-fields {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 6px;
+  align-self: stretch;
+}
+.row.is-map .arrow { display: none; }
+.row.is-map .inp-replace { display: none; }
+.row.is-map .field-replace { align-items: stretch; }
+.row .inp-replace-map { display: none; }
+.row.is-map .inp-replace-map { display: block; }
+.inp-replace-map {
+  flex: 1;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  min-height: 110px;
+}
+.inp-replace-map::placeholder {
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
 
 /* Checkbox */
 .row-select { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -400,6 +437,17 @@ button { font-family: inherit; }
   color: var(--accent);
   background: var(--accent-dim);
   border-color: var(--accent);
+}
+.tgl-map-glyph {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: -0.02em;
+}
+.tgl-map[aria-pressed="true"] {
+  color: var(--ok);
+  background: rgba(81, 207, 102, 0.14);
+  border-color: var(--ok);
 }
 .tgl:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 

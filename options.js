@@ -1,8 +1,8 @@
 (() => {
   const ROW_H = 62;
+  const MAP_ROW_H = 180;
   const ROW_GAP = 2;
   const BUFFER = 6;
-  const STEP = ROW_H + ROW_GAP;
 
   const $ = (id) => document.getElementById(id);
   const viewport   = $('viewport');
@@ -33,16 +33,25 @@
     selected: new Set(),
     indexed: [],
     invalid: new Map(),
+    offsets: [0],
   };
 
-  // Row recycling pool — keyed by rule id so focus survives
   const rowPool = new Map();
 
   // Storage
+  const normalizeRule = (r) => ({
+    id: r.id || uid(),
+    enabled: r.enabled !== false,
+    find: String(r.find ?? ''),
+    replace: String(r.replace ?? ''),
+    isRegex: !!(r.isRegex || r.isMap),
+    wholeWord: !!r.wholeWord,
+    isMap: !!r.isMap,
+  });
   const loadRules = async () => {
     if (!hasStorage) return [];
     const { rules = [] } = await chrome.storage.local.get('rules');
-    return Array.isArray(rules) ? rules : [];
+    return (Array.isArray(rules) ? rules : []).map(normalizeRule);
   };
   let saveTimer = 0;
   const saveRules = () => {
@@ -54,17 +63,30 @@
   };
 
   // Helpers
-  const uid = () => 'r_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-  const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  function uid() {
+    return 'r_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  }
+
+  const countGroups = (pattern) => {
+    try {
+      const m = new RegExp(String(pattern) + '|').exec('');
+      return m ? m.length - 1 : 0;
+    } catch { return -1; }
+  };
 
   const validateRule = (r) => {
-    if (!r.isRegex) return null;
     if (!r.find) return null;
-    try {
-      const pat = r.wholeWord ? `\\b(?:${r.find})\\b` : r.find;
-      new RegExp(pat, 'g');
-      return null;
-    } catch (e) { return String(e.message || e); }
+    if (r.isRegex || r.isMap) {
+      try {
+        const pat = r.wholeWord ? `\\b(?:${r.find})\\b` : r.find;
+        new RegExp(pat, 'g');
+      } catch (e) { return String(e.message || e); }
+      if (r.isMap) {
+        const groups = countGroups(r.find);
+        if (groups < 1) return 'Map mode needs at least one capture group, e.g. (take|talk).';
+      }
+    }
+    return null;
   };
 
   const refreshInvalid = () => {
@@ -83,16 +105,35 @@
       .filter(({ r }) => {
         if (status === 'enabled' && !r.enabled) return false;
         if (status === 'disabled' && r.enabled) return false;
-        if (regexOnly && !r.isRegex) return false;
+        if (regexOnly && !(r.isRegex || r.isMap)) return false;
         if (q) {
           const hay = `${r.find}\n${r.replace}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
       });
+    const offsets = new Array(state.indexed.length + 1);
+    offsets[0] = 0;
+    for (let i = 0; i < state.indexed.length; i++) {
+      const r = state.indexed[i].r;
+      const h = r.isMap ? MAP_ROW_H : ROW_H;
+      offsets[i + 1] = offsets[i] + h + ROW_GAP;
+    }
+    state.offsets = offsets;
   };
 
-  // Update count pill
+  // Binary search the first index whose row starts at or after y
+  const indexAtY = (y) => {
+    const o = state.offsets;
+    let lo = 0, hi = o.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (o[mid + 1] <= y) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+
   const updateCount = () => {
     const total = state.rules.length;
     const shown = state.indexed.length;
@@ -100,13 +141,6 @@
     countPill.textContent = shown === total ? `${total} ${word}` : `${shown} of ${total} ${word}`;
   };
 
-  // Selection / bulk toolbar
-  const visibleSelected = () => {
-    const ids = new Set(state.indexed.map(({ r }) => r.id));
-    let n = 0;
-    for (const id of state.selected) if (ids.has(id)) n++;
-    return n;
-  };
   const updateBulkBar = () => {
     const n = state.selected.size;
     if (n === 0) {
@@ -119,10 +153,10 @@
     }
   };
 
-  // Virtualized rendering
+  // Virtualized rendering with variable row heights
   const render = () => {
     const shown = state.indexed;
-    const totalH = shown.length * STEP;
+    const totalH = state.offsets[shown.length] || 0;
     spacer.style.height = `${totalH}px`;
 
     if (shown.length === 0) {
@@ -141,11 +175,11 @@
 
     const scrollTop = viewport.scrollTop;
     const vh = viewport.clientHeight;
-    const start = Math.max(0, Math.floor(scrollTop / STEP) - BUFFER);
-    const end = Math.min(shown.length, Math.ceil((scrollTop + vh) / STEP) + BUFFER);
+    const startIdx = Math.max(0, indexAtY(scrollTop) - BUFFER);
+    const endIdx = Math.min(shown.length, indexAtY(scrollTop + vh) + BUFFER + 1);
 
     const live = new Set();
-    for (let i = start; i < end; i++) {
+    for (let i = startIdx; i < endIdx; i++) {
       const { r } = shown[i];
       live.add(r.id);
       let el = rowPool.get(r.id);
@@ -156,7 +190,8 @@
         rowsLayer.appendChild(el);
       }
       el.style.display = '';
-      el.style.transform = `translateY(${i * STEP}px)`;
+      el.style.transform = `translateY(${state.offsets[i]}px)`;
+      el.style.height = `${r.isMap ? MAP_ROW_H : ROW_H}px`;
       paintRow(el, r);
     }
 
@@ -165,12 +200,13 @@
     }
   };
 
-  // Paint (without clobbering focused input)
+  // Paint (without clobbering focused inputs)
   const paintRow = (el, r) => {
     el.dataset.ruleId = r.id;
     el.classList.toggle('is-disabled', !r.enabled);
     el.classList.toggle('is-selected', state.selected.has(r.id));
     el.classList.toggle('is-invalid', state.invalid.has(r.id));
+    el.classList.toggle('is-map', !!r.isMap);
 
     const check = el.querySelector('.row-check');
     if (check.checked !== state.selected.has(r.id)) check.checked = state.selected.has(r.id);
@@ -182,19 +218,34 @@
     if (document.activeElement !== find && find.value !== (r.find ?? '')) find.value = r.find ?? '';
 
     const rep = el.querySelector('.inp-replace');
-    if (document.activeElement !== rep && rep.value !== (r.replace ?? '')) rep.value = r.replace ?? '';
+    const repMap = el.querySelector('.inp-replace-map');
+    if (r.isMap) {
+      if (document.activeElement !== repMap && repMap.value !== (r.replace ?? '')) repMap.value = r.replace ?? '';
+    } else {
+      if (document.activeElement !== rep && rep.value !== (r.replace ?? '')) rep.value = r.replace ?? '';
+    }
 
     const tglRegex = el.querySelector('.tgl-regex');
-    tglRegex.setAttribute('aria-pressed', r.isRegex ? 'true' : 'false');
+    tglRegex.setAttribute('aria-pressed', (r.isRegex || r.isMap) ? 'true' : 'false');
 
     const tglWhole = el.querySelector('.tgl-whole');
     tglWhole.setAttribute('aria-pressed', r.wholeWord ? 'true' : 'false');
 
+    const tglMap = el.querySelector('.tgl-map');
+    tglMap.setAttribute('aria-pressed', r.isMap ? 'true' : 'false');
+
     const err = state.invalid.get(r.id);
-    find.title = err ? `Regex error: ${err}` : '';
+    find.title = err ? `Error: ${err}` : '';
   };
 
   const getRuleById = (id) => state.rules.find((x) => x.id === id);
+
+  const touchInvalidFor = (el, id) => {
+    refreshInvalid();
+    el.classList.toggle('is-invalid', state.invalid.has(id));
+    const find = el.querySelector('.inp-find');
+    find.title = state.invalid.has(id) ? `Error: ${state.invalid.get(id)}` : '';
+  };
 
   const wireRow = (el, id) => {
     const check = el.querySelector('.row-check');
@@ -218,17 +269,23 @@
       const r = getRuleById(id);
       if (!r) return;
       r.find = find.value;
-      refreshInvalid();
-      el.classList.toggle('is-invalid', state.invalid.has(id));
-      find.title = state.invalid.get(id) ? `Regex error: ${state.invalid.get(id)}` : '';
+      touchInvalidFor(el, id);
       saveRules();
     });
 
     const rep = el.querySelector('.inp-replace');
     rep.addEventListener('input', () => {
       const r = getRuleById(id);
-      if (!r) return;
+      if (!r || r.isMap) return;
       r.replace = rep.value;
+      saveRules();
+    });
+
+    const repMap = el.querySelector('.inp-replace-map');
+    repMap.addEventListener('input', () => {
+      const r = getRuleById(id);
+      if (!r || !r.isMap) return;
+      r.replace = repMap.value;
       saveRules();
     });
 
@@ -236,10 +293,12 @@
     tglRegex.addEventListener('click', () => {
       const r = getRuleById(id);
       if (!r) return;
-      r.isRegex = !r.isRegex;
-      tglRegex.setAttribute('aria-pressed', r.isRegex ? 'true' : 'false');
-      refreshInvalid();
-      el.classList.toggle('is-invalid', state.invalid.has(id));
+      r.isRegex = !(r.isRegex || r.isMap);
+      if (!r.isRegex && r.isMap) r.isMap = false;
+      tglRegex.setAttribute('aria-pressed', (r.isRegex || r.isMap) ? 'true' : 'false');
+      el.querySelector('.tgl-map').setAttribute('aria-pressed', r.isMap ? 'true' : 'false');
+      el.classList.toggle('is-map', !!r.isMap);
+      touchInvalidFor(el, id);
       saveRules();
       reindex(); render();
     });
@@ -250,9 +309,26 @@
       if (!r) return;
       r.wholeWord = !r.wholeWord;
       tglWhole.setAttribute('aria-pressed', r.wholeWord ? 'true' : 'false');
-      refreshInvalid();
-      el.classList.toggle('is-invalid', state.invalid.has(id));
+      touchInvalidFor(el, id);
       saveRules();
+    });
+
+    const tglMap = el.querySelector('.tgl-map');
+    tglMap.addEventListener('click', () => {
+      const r = getRuleById(id);
+      if (!r) return;
+      r.isMap = !r.isMap;
+      if (r.isMap) r.isRegex = true;
+      tglMap.setAttribute('aria-pressed', r.isMap ? 'true' : 'false');
+      tglRegex.setAttribute('aria-pressed', (r.isRegex || r.isMap) ? 'true' : 'false');
+      el.classList.toggle('is-map', !!r.isMap);
+      touchInvalidFor(el, id);
+      saveRules();
+      reindex(); render();
+      requestAnimationFrame(() => {
+        const rep2 = el.querySelector(r.isMap ? '.inp-replace-map' : '.inp-replace');
+        rep2?.focus();
+      });
     });
 
     const del = el.querySelector('.row-delete');
@@ -261,14 +337,7 @@
 
   // Mutations
   const addRule = () => {
-    const r = {
-      id: uid(),
-      enabled: true,
-      find: '',
-      replace: '',
-      isRegex: false,
-      wholeWord: false,
-    };
+    const r = normalizeRule({});
     state.rules.unshift(r);
     refreshInvalid();
     reindex();
@@ -423,7 +492,7 @@
 
   // Import / Export
   $('btn-export').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ version: 1, rules: state.rules }, null, 2)], {
+    const blob = new Blob([JSON.stringify({ version: 2, rules: state.rules }, null, 2)], {
       type: 'application/json',
     });
     const url = URL.createObjectURL(blob);
@@ -443,14 +512,7 @@
       const data = JSON.parse(text);
       const incoming = Array.isArray(data) ? data : data.rules;
       if (!Array.isArray(incoming)) throw new Error('Invalid format: expected an array of rules.');
-      const norm = incoming.map((r) => ({
-        id: uid(),
-        enabled: r.enabled !== false,
-        find: String(r.find ?? ''),
-        replace: String(r.replace ?? ''),
-        isRegex: !!r.isRegex,
-        wholeWord: !!r.wholeWord,
-      }));
+      const norm = incoming.map((r) => normalizeRule({ ...r, id: uid() }));
       state.rules = [...norm, ...state.rules];
       refreshInvalid(); reindex(); render(); updateCount();
       saveRules();
@@ -473,7 +535,7 @@
   if (hasStorage) {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local' || !changes.rules) return;
-      const incoming = changes.rules.newValue || [];
+      const incoming = (changes.rules.newValue || []).map(normalizeRule);
       if (JSON.stringify(incoming) === JSON.stringify(state.rules)) return;
       state.rules = incoming;
       refreshInvalid(); reindex(); render(); updateCount();
