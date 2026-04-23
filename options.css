@@ -30,6 +30,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0; padding: 0;
@@ -131,7 +132,6 @@ button { font-family: inherit; }
   gap: 14px;
   flex-wrap: wrap;
 }
-.toolbar-default[hidden], .toolbar-bulk[hidden] { display: none; }
 .search {
   position: relative;
   flex: 1;
