@@ -8,7 +8,7 @@ Manifest V3 Chrome extension that rewrites text on any webpage using find‑and�
 - **Unlimited rules** in a virtualized, single‑pane scrolling list (no pagination).
 - **Live search** across find + replace text; **filter pills** by status (All / Enabled / Disabled) and regex‑only.
 - **Bulk actions** — select rows with the always‑visible checkbox; the toolbar swaps in to offer Enable, Disable, Duplicate, and Delete. Destructive actions ask for confirmation with a count, and expose an Undo toast for 8s.
-- **Per‑rule toggles** — inline VS Code‑style `.*` regex and `|ab|` match‑whole‑word buttons on each row. Invalid regex gets a red accent and an inline error tooltip; the engine skips it instead of breaking the page.
+- **Per‑rule toggles** — inline VS Code‑style `.*` regex, `|ab|` match‑whole‑word, and `Aa` ignore‑case buttons on each row. Invalid regex gets a red accent and an inline error tooltip; the engine skips it instead of breaking the page.
 - **Map mode** (`{·}` toggle) — conditional replacement driven by the captured group. Find must be a regex with at least one capture; Replace holds a `key=value` table, one per line, with optional `*=fallback` and `$1..$9` / `$&` backreferences. Example: find `\bdared? to (take|talk|walk)\b`, replace `take=took` / `talk=talked` / `walk=walked`. Rows in Map mode expand inline into a multi‑line editor.
 - **Import / Export** rules as JSON for backup and sharing.
 - **Saves across reload and restart** via `chrome.storage.local`; changes propagate to the content script in real time through `chrome.storage.onChanged`.
