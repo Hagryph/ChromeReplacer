@@ -47,6 +47,7 @@
     isRegex: !!(r.isRegex || r.isMap),
     wholeWord: !!r.wholeWord,
     isMap: !!r.isMap,
+    caseInsensitive: !!r.caseInsensitive,
   });
   const loadRules = async () => {
     if (!hasStorage) return [];
@@ -234,6 +235,9 @@
     const tglMap = el.querySelector('.tgl-map');
     tglMap.setAttribute('aria-pressed', r.isMap ? 'true' : 'false');
 
+    const tglCi = el.querySelector('.tgl-ci');
+    tglCi.setAttribute('aria-pressed', r.caseInsensitive ? 'true' : 'false');
+
     const err = state.invalid.get(r.id);
     find.title = err ? `Error: ${err}` : '';
   };
@@ -309,6 +313,16 @@
       if (!r) return;
       r.wholeWord = !r.wholeWord;
       tglWhole.setAttribute('aria-pressed', r.wholeWord ? 'true' : 'false');
+      touchInvalidFor(el, id);
+      saveRules();
+    });
+
+    const tglCi = el.querySelector('.tgl-ci');
+    tglCi.addEventListener('click', () => {
+      const r = getRuleById(id);
+      if (!r) return;
+      r.caseInsensitive = !r.caseInsensitive;
+      tglCi.setAttribute('aria-pressed', r.caseInsensitive ? 'true' : 'false');
       touchInvalidFor(el, id);
       saveRules();
     });

@@ -439,6 +439,12 @@ button { font-family: inherit; }
   background: var(--accent-dim);
   border-color: var(--accent);
 }
+.tgl-ci { font-family: var(--mono); font-weight: 700; }
+.tgl-ci[aria-pressed="true"] {
+  color: #ffa94d;
+  background: rgba(255, 169, 77, 0.14);
+  border-color: #ffa94d;
+}
 .tgl-map-glyph {
   font-family: var(--mono);
   font-weight: 700;

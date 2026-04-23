@@ -43,7 +43,7 @@
           const escaped = escapeRegex(find);
           pattern = r.wholeWord ? `\\b${escaped}\\b` : escaped;
         }
-        const re = new RegExp(pattern, 'g');
+        const re = new RegExp(pattern, r.caseInsensitive ? 'gi' : 'g');
         if (r.isMap) {
           const { map, fallback } = parseMap(r.replace);
           out.push({ re, isMap: true, map, fallback });
