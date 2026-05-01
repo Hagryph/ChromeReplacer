@@ -48,6 +48,7 @@
     wholeWord: !!r.wholeWord,
     isMap: !!r.isMap,
     caseInsensitive: !!r.caseInsensitive,
+    loosePunct: !!r.loosePunct,
   });
   const loadRules = async () => {
     if (!hasStorage) return [];
@@ -238,6 +239,9 @@
     const tglCi = el.querySelector('.tgl-ci');
     tglCi.setAttribute('aria-pressed', r.caseInsensitive ? 'true' : 'false');
 
+    const tglLoose = el.querySelector('.tgl-loose');
+    tglLoose.setAttribute('aria-pressed', r.loosePunct ? 'true' : 'false');
+
     const err = state.invalid.get(r.id);
     find.title = err ? `Error: ${err}` : '';
   };
@@ -323,6 +327,16 @@
       if (!r) return;
       r.caseInsensitive = !r.caseInsensitive;
       tglCi.setAttribute('aria-pressed', r.caseInsensitive ? 'true' : 'false');
+      touchInvalidFor(el, id);
+      saveRules();
+    });
+
+    const tglLoose = el.querySelector('.tgl-loose');
+    tglLoose.addEventListener('click', () => {
+      const r = getRuleById(id);
+      if (!r) return;
+      r.loosePunct = !r.loosePunct;
+      tglLoose.setAttribute('aria-pressed', r.loosePunct ? 'true' : 'false');
       touchInvalidFor(el, id);
       saveRules();
     });

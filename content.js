@@ -9,6 +9,23 @@
 
   const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+  const looseLiteral = (s) => {
+    let out = '';
+    let i = 0;
+    while (i < s.length) {
+      if (/\w/.test(s[i])) {
+        let j = i;
+        while (j < s.length && /\w/.test(s[j])) j++;
+        out += s.slice(i, j);
+        i = j;
+      } else {
+        while (i < s.length && !/\w/.test(s[i])) i++;
+        out += '\\W*';
+      }
+    }
+    return out;
+  };
+
   const parseMap = (text) => {
     const map = Object.create(null);
     let fallback;
@@ -40,8 +57,8 @@
         if (asRegex) {
           pattern = r.wholeWord ? `(?:\\b(?:${find})\\b)` : find;
         } else {
-          const escaped = escapeRegex(find);
-          pattern = r.wholeWord ? `\\b${escaped}\\b` : escaped;
+          const body = r.loosePunct ? looseLiteral(find) : escapeRegex(find);
+          pattern = r.wholeWord ? `\\b(?:${body})\\b` : body;
         }
         const re = new RegExp(pattern, r.caseInsensitive ? 'gi' : 'g');
         if (r.isMap) {

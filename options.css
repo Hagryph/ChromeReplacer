@@ -445,6 +445,12 @@ button { font-family: inherit; }
   background: rgba(255, 169, 77, 0.14);
   border-color: #ffa94d;
 }
+.tgl-loose { font-family: var(--mono); font-weight: 700; font-size: 13px; line-height: 1; }
+.tgl-loose[aria-pressed="true"] {
+  color: #f06595;
+  background: rgba(240, 101, 149, 0.14);
+  border-color: #f06595;
+}
 .tgl-map-glyph {
   font-family: var(--mono);
   font-weight: 700;
