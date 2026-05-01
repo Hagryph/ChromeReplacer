@@ -9,21 +9,48 @@
 
   const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-  const looseLiteral = (s) => {
-    let out = '';
+  const splitWordPunct = (s) => {
+    const out = [];
     let i = 0;
     while (i < s.length) {
-      if (/\w/.test(s[i])) {
-        let j = i;
-        while (j < s.length && /\w/.test(s[j])) j++;
-        out += s.slice(i, j);
-        i = j;
-      } else {
-        while (i < s.length && !/\w/.test(s[i])) i++;
-        out += '\\W*';
-      }
+      const isWord = /\w/.test(s[i]);
+      let j = i;
+      while (j < s.length && /\w/.test(s[j]) === isWord) j++;
+      out.push({ type: isWord ? 'word' : 'punct', text: s.slice(i, j) });
+      i = j;
     }
     return out;
+  };
+
+  // For loose-punct literal rules: build a regex that captures every
+  // punctuation run as its own group, plus a replacement template that
+  // re-injects those captures so the original separators are preserved.
+  const buildLoosePair = (find, replace) => {
+    const fSegs = splitWordPunct(find);
+    let pattern = '';
+    let groups = 0;
+    for (const seg of fSegs) {
+      if (seg.type === 'word') {
+        pattern += seg.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      } else {
+        pattern += '(\\W*)';
+        groups++;
+      }
+    }
+    const rSegs = splitWordPunct(replace);
+    let template = '';
+    let punctIdx = 0;
+    for (const seg of rSegs) {
+      if (seg.type === 'word') {
+        template += seg.text.replace(/\$/g, '$$$$');
+      } else {
+        punctIdx++;
+        template += punctIdx <= groups
+          ? '$' + punctIdx
+          : seg.text.replace(/\$/g, '$$$$');
+      }
+    }
+    return { pattern, template };
   };
 
   const parseMap = (text) => {
@@ -54,18 +81,25 @@
       try {
         const asRegex = r.isRegex || r.isMap;
         let pattern;
+        let template;
         if (asRegex) {
           pattern = r.wholeWord ? `(?:\\b(?:${find})\\b)` : find;
+          template = r.replace ?? '';
+        } else if (r.loosePunct) {
+          const built = buildLoosePair(find, r.replace ?? '');
+          pattern = r.wholeWord ? `\\b(?:${built.pattern})\\b` : built.pattern;
+          template = built.template;
         } else {
-          const body = r.loosePunct ? looseLiteral(find) : escapeRegex(find);
-          pattern = r.wholeWord ? `\\b(?:${body})\\b` : body;
+          const escaped = escapeRegex(find);
+          pattern = r.wholeWord ? `\\b${escaped}\\b` : escaped;
+          template = r.replace ?? '';
         }
         const re = new RegExp(pattern, r.caseInsensitive ? 'gi' : 'g');
         if (r.isMap) {
           const { map, fallback } = parseMap(r.replace);
           out.push({ re, isMap: true, map, fallback });
         } else {
-          out.push({ re, isMap: false, replace: r.replace ?? '' });
+          out.push({ re, isMap: false, replace: template });
         }
       } catch {
         // invalid regex — skip silently; options page surfaces parse errors
