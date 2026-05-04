@@ -86,6 +86,10 @@
           pattern = r.wholeWord ? `(?:\\b(?:${find})\\b)` : find;
           template = r.replace ?? '';
         } else if (r.loosePunct) {
+          // Loose mode + $N backrefs is a footgun: $1 followed by user's
+          // literal "1" becomes $11 which V8 misreads. Refuse to compile
+          // and let validation surface the red-accent tooltip.
+          if (/\$\d/.test(r.replace ?? '')) continue;
           const built = buildLoosePair(find, r.replace ?? '');
           pattern = r.wholeWord ? `\\b(?:${built.pattern})\\b` : built.pattern;
           template = built.template;
