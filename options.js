@@ -87,6 +87,8 @@
         const groups = countGroups(r.find);
         if (groups < 1) return 'Map mode needs at least one capture group, e.g. (take|talk).';
       }
+    } else if (r.loosePunct && /\$\d/.test(r.replace ?? '')) {
+      return 'Use regex mode (.*) for $N backreferences. Loose mode is for literal text with flexible punctuation.';
     }
     return null;
   };
