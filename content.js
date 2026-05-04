@@ -5,7 +5,7 @@
   ]);
 
   let compiled = [];
-  let applying = false;
+  const justWritten = new WeakSet();
 
   const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -141,7 +141,10 @@
         next = next.replace(rule.re, rule.replace);
       }
     }
-    if (next !== original) node.nodeValue = next;
+    if (next !== original) {
+      justWritten.add(node);
+      node.nodeValue = next;
+    }
   };
 
   const walk = (root) => {
@@ -152,32 +155,33 @@
     const batch = [];
     let cur;
     while ((cur = walker.nextNode())) batch.push(cur);
-    applying = true;
-    try { for (const n of batch) applyToTextNode(n); }
-    finally { applying = false; }
+    for (const n of batch) applyToTextNode(n);
   };
 
   const observer = new MutationObserver((records) => {
-    if (applying || !compiled.length) return;
-    applying = true;
-    try {
-      for (const rec of records) {
-        for (const node of rec.addedNodes) {
-          if (node.nodeType === Node.TEXT_NODE) {
-            if (!shouldSkip(node)) applyToTextNode(node);
-          } else if (node.nodeType === Node.ELEMENT_NODE) {
-            walk(node);
-          }
+    if (!compiled.length) return;
+    for (const rec of records) {
+      if (rec.type === 'characterData') {
+        const t = rec.target;
+        if (justWritten.has(t)) { justWritten.delete(t); continue; }
+        if (t.nodeType === Node.TEXT_NODE && !shouldSkip(t)) applyToTextNode(t);
+        continue;
+      }
+      for (const node of rec.addedNodes) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          if (!shouldSkip(node)) applyToTextNode(node);
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          walk(node);
         }
       }
-    } finally { applying = false; }
+    }
   });
 
   const start = async () => {
     const { rules = [] } = await chrome.storage.local.get('rules');
     compiled = compile(rules);
     if (compiled.length) walk(document.body || document.documentElement);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
   };
 
   chrome.storage.onChanged.addListener((changes, area) => {
