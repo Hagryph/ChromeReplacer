@@ -7,6 +7,13 @@
   let compiled = [];
   const justWritten = new WeakSet();
 
+  // Only apply replacements while this tab is the foreground (visible) tab.
+  // Keeps background tabs from churning DOM mid-edit elsewhere. When the tab
+  // becomes visible again, we run a full catch-up walk so anything that
+  // appeared while hidden still gets processed.
+  const isActive = () => document.visibilityState === 'visible';
+  let missedWhileHidden = false;
+
   const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
   const splitWordPunct = (s) => {
@@ -149,6 +156,7 @@
 
   const walk = (root) => {
     if (!compiled.length) return;
+    if (!isActive()) { missedWhileHidden = true; return; }
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) => (shouldSkip(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT)
     });
@@ -160,6 +168,7 @@
 
   const observer = new MutationObserver((records) => {
     if (!compiled.length) return;
+    if (!isActive()) { missedWhileHidden = true; return; }
     for (const rec of records) {
       if (rec.type === 'characterData') {
         const t = rec.target;
@@ -183,6 +192,13 @@
     if (compiled.length) walk(document.body || document.documentElement);
     observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
   };
+
+  // Catch up when the tab returns to the foreground.
+  document.addEventListener('visibilitychange', () => {
+    if (!isActive() || !missedWhileHidden || !compiled.length) return;
+    missedWhileHidden = false;
+    walk(document.body || document.documentElement);
+  });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes.rules) return;
